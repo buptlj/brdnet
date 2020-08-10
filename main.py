@@ -61,7 +61,7 @@ def train(dataloader, model, loss_func, optimizer, epoch, args):
         total_loss += loss.item()
         if batch_i % args.print_iters == 0:
             print("Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f}".format(batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1)))
-        break
+        #if batch_i > 10: break
     print('')
     return total_loss / (batch_i + 1)
 
@@ -88,6 +88,7 @@ def val(dataloader, model, loss_func, epoch, args):
             if batch_i % args.print_iters == 0:
                 print("Batch: {}/{} | val_loss: {:.6f} | Mean loss: {:.6f}, psnr: {:.2f}, mean psnr: {:.2f}, org_psnr: {:.2f}, mean org_psnr: {:.2f}".format(
                     batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1), psnr, total_psnr/(batch_i+1), org_psnr, total_org_psnr/(batch_i+1)))
+            #if batch_i > 10: break
     print('mean psnr: ', total_psnr / len(dataloader))
     print('mean org psnr: ', total_org_psnr / len(dataloader))
     print('mean loss: ', total_loss / len(dataloader))
@@ -125,7 +126,9 @@ def main():
 
         if (epoch) % args.save_interval == 0:
             torch.save(model.state_dict(), "{}/model_checkpoint_{}.pth".format(args.save_dir, epoch))
-        break
+        #if epoch > 10: break
+
+    print('done')
 
 
 if __name__ == '__main__':
