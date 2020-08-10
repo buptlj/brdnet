@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader
 from dataset import CTDataset
 from models import BRDNet
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from utils.logger import setup_logger
+import logging
 
 
 def get_args():
@@ -43,7 +45,7 @@ def get_args():
     return args
 
 
-def train(dataloader, model, loss_func, optimizer, epoch, args):
+def train(dataloader, model, loss_func, optimizer, epoch, args, logger):
     total_loss = 0.0
     model.train()
     for batch_i, (inp_data, gt_data) in enumerate(dataloader):
@@ -60,14 +62,14 @@ def train(dataloader, model, loss_func, optimizer, epoch, args):
 
         total_loss += loss.item()
         if batch_i % args.print_iters == 0:
-            print("Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f}".format(batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1)))
+            logger.info("Epoch: {} Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f}".format(epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1)))
         #if batch_i > 10: break
     print('')
     return total_loss / (batch_i + 1)
 
 
 
-def val(dataloader, model, loss_func, epoch, args):
+def val(dataloader, model, loss_func, epoch, args, logger):
     total_loss = 0.0
     total_psnr = 0.0
     total_org_psnr = 0.0
@@ -86,12 +88,12 @@ def val(dataloader, model, loss_func, epoch, args):
             total_psnr += psnr
             total_org_psnr += org_psnr
             if batch_i % args.print_iters == 0:
-                print("Batch: {}/{} | val_loss: {:.6f} | Mean loss: {:.6f}, psnr: {:.2f}, mean psnr: {:.2f}, org_psnr: {:.2f}, mean org_psnr: {:.2f}".format(
-                    batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1), psnr, total_psnr/(batch_i+1), org_psnr, total_org_psnr/(batch_i+1)))
+                logger.info("Epoch: {} Batch: {}/{} | val_loss: {:.6f} | Mean loss: {:.6f}, psnr: {:.2f}, mean psnr: {:.2f}, org_psnr: {:.2f}, mean org_psnr: {:.2f}".format(
+                    epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1), psnr, total_psnr/(batch_i+1), org_psnr, total_org_psnr/(batch_i+1)))
             #if batch_i > 10: break
-    print('mean psnr: ', total_psnr / len(dataloader))
-    print('mean org psnr: ', total_org_psnr / len(dataloader))
-    print('mean loss: ', total_loss / len(dataloader))
+    logger.info('mean psnr: {}'.format(total_psnr / len(dataloader)))
+    logger.info('mean org psnr: {}'.format(total_org_psnr / len(dataloader)))
+    logger.info('mean loss: {}'.format(total_loss / len(dataloader)))
     return total_loss / len(dataloader)
 
 
@@ -101,6 +103,11 @@ def main():
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     device = args.device
+
+    logger = setup_logger("brdnet", args.save_dir, 0)
+    logger.info("Using device {}".format(device))
+    logger.info(args)
+
     train_data = CTDataset(data_path=args.train_path, patch_n=args.patch_n, patch_size=args.patch_size)
     val_data = CTDataset(data_path=args.val_path, patch_n=None, patch_size=None)
     train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
@@ -115,9 +122,9 @@ def main():
 
     best_loss = float('inf')
     for epoch in range(1, args.num_epochs + 1):
-        print('epoch: {}/{}'.format(epoch, args.num_epochs))
-        t_loss = train(train_loader, model, loss_func, optimizer, epoch, args)
-        v_loss = val(val_loader, model, loss_func, epoch, args)
+        logger.info('epoch: {}/{}'.format(epoch, args.num_epochs))
+        t_loss = train(train_loader, model, loss_func, optimizer, epoch, args, logger)
+        v_loss = val(val_loader, model, loss_func, epoch, args, logger)
         lr_scheduler.step(v_loss)
 
         if v_loss < best_loss:
@@ -128,7 +135,7 @@ def main():
             torch.save(model.state_dict(), "{}/model_checkpoint_{}.pth".format(args.save_dir, epoch))
         #if epoch > 10: break
 
-    print('done')
+    logger.info('done')
 
 
 if __name__ == '__main__':
