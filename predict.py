@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import os
 import argparse
+import numpy as np
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
 
@@ -17,10 +18,10 @@ import logging
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='train', help="train | test")
-    parser.add_argument('--pretrained', type=str, default='./save/WGANVGG_31000iter.ckpt', help="pretrained model")
+    parser.add_argument('--pretrained', type=str, default='./ckpt/b8xn10xs50/model_checkpoint_35.pth', help="pretrained model")
 
     parser.add_argument('--train_path', type=str, default='../data/prj_denoise/train.txt')
-    parser.add_argument('--val_path', type=str, default='../data/prj_denoise/val.txt')
+    parser.add_argument('--val_path', type=str, default='../data/prj_denoise/val.31101.txt')
     parser.add_argument('--save_dir', type=str, default='./ckpt/1')
     parser.add_argument('--result_fig', type=bool, default=True)
     parser.add_argument('--transform', type=bool, default=False)
@@ -44,29 +45,13 @@ def get_args():
     print(args)
     return args
 
+def save_denoise_img(pred, data_path):
+    #'/data/projects/applect/projections_gaussian_noise/data_noisy_31116_090.tif'
+    pred = pred.squeeze(0).squeeze(0)
+    pred = pred.cpu().numpy()
+    save_path = data_path.replace('projections_gaussian_noise', 'apple_31101/gauss_prj_denoise').replace('_noisy', '').replace('.tif', '.npy')
 
-def train(dataloader, model, loss_func, optimizer, epoch, args, logger):
-    total_loss = 0.0
-    model.train()
-    for batch_i, (inp_data, gt_data, _) in enumerate(dataloader):
-        if args.patch_size:
-            inp_data = inp_data.view(-1, 1, args.patch_size, args.patch_size)
-            gt_data = gt_data.view(-1, 1, args.patch_size, args.patch_size)
-        inp_data = inp_data.to(args.device)
-        gt_data = gt_data.to(args.device)
-        pred = model(inp_data)
-        loss = loss_func(pred, gt_data)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-        if batch_i % args.print_iters == 0:
-            logger.info("Epoch: {} Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f}".format(epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1)))
-        #if batch_i > 10: break
-    print('')
-    return total_loss / (batch_i + 1)
-
+    np.save(save_path, pred)
 
 
 def val(dataloader, model, loss_func, epoch, args, logger):
@@ -75,10 +60,13 @@ def val(dataloader, model, loss_func, epoch, args, logger):
     total_org_psnr = 0.0
     model.eval()
     with torch.no_grad():
-        for batch_i, (inp_data, gt_data, _) in enumerate(dataloader):
+        for batch_i, (inp_data, gt_data, inp_path) in enumerate(dataloader):
             inp_data = inp_data.unsqueeze(0).to(args.device)
             gt_data = gt_data.unsqueeze(0).to(args.device)
             pred = model(inp_data)
+            pred[pred < 0] = 0
+            pred[pred > 1] = 1
+            save_denoise_img(pred, inp_path[0])
             loss = loss_func(pred, gt_data)
             org_mse = loss_func(inp_data, gt_data)
             # batch size 1
@@ -97,7 +85,6 @@ def val(dataloader, model, loss_func, epoch, args, logger):
     return total_loss / len(dataloader)
 
 
-
 def main():
     args = get_args()
     if not os.path.exists(args.save_dir):
@@ -108,34 +95,14 @@ def main():
     logger.info("Using device {}".format(device))
     logger.info(args)
 
-    train_data = CTDataset(data_path=args.train_path, patch_n=args.patch_n, patch_size=args.patch_size)
     val_data = CTDataset(data_path=args.val_path, patch_n=None, patch_size=None)
-    train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     val_loader = DataLoader(dataset=val_data, batch_size=1, shuffle=False, num_workers=args.num_workers)
     model = BRDNet()
-    if args.pretrained != '':
-        model.load_state_dict(torch.load(args.pretrained))
+    model.load_state_dict(torch.load(args.pretrained))
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), args.lr)
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.3, verbose=True, patience=6, min_lr=1E-7)
-
     loss_func = nn.MSELoss()
-
-    best_loss = float('inf')
-    for epoch in range(1, args.num_epochs + 1):
-        logger.info('epoch: {}/{}'.format(epoch, args.num_epochs))
-        t_loss = train(train_loader, model, loss_func, optimizer, epoch, args, logger)
-        v_loss = val(val_loader, model, loss_func, epoch, args, logger)
-        lr_scheduler.step(v_loss)
-
-        if v_loss < best_loss:
-            best_loss = v_loss
-            torch.save(model.state_dict(), '{}/model_best.pth'.format(args.save_dir))
-
-        if (epoch) % args.save_interval == 0:
-            torch.save(model.state_dict(), "{}/model_checkpoint_{}.pth".format(args.save_dir, epoch))
-        #if epoch > 10: break
+    v_loss = val(val_loader, model, loss_func, 0, args, logger)
 
     logger.info('done')
 

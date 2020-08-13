@@ -33,17 +33,17 @@ class CTDataset(Dataset):
     def __getitem__(self, idx):
         inp_path = self.inp_paths[idx]
         gt_path = self.gt_paths[idx]
-        inp_data = get_data(inp_path)
-        gt_data = get_data(gt_path)
+        inp_data = get_data(inp_path, norm=0)
+        gt_data = get_data(gt_path, norm=0)
         if self.patch_size:
             input_patches, target_patches = get_patch(inp_data, gt_data, self.patch_n, self.patch_size)
             #print(input_patches.min(), input_patches.max())
             #print(target_patches.min(), target_patches.max())
             return (input_patches, target_patches)
         else:
-            return (inp_data, gt_data)
+            return (inp_data, gt_data, inp_path)
 
-def get_data(data_path):
+def get_data(data_path, norm=0):
     suffix = data_path.split('/')[-1].split('.')[-1]
     if suffix == 'npy':
         data = np.load(data_path)
@@ -53,10 +53,10 @@ def get_data(data_path):
     else:
         data = cv2.imread(data_path)
 
-    min_v = data.min()
-    max_v = data.max()
-    #input_img = (input_img - min_v) / (max_v - min_v) * 255
-    data = (data - min_v) / (max_v - min_v)
+    if norm:
+        min_v = data.min()
+        max_v = data.max()
+        data = (data - min_v) / (max_v - min_v) * norm
     #print('data: ', data.min(), data.max())
     return data
 
