@@ -33,13 +33,13 @@ class CTDataset(Dataset):
     def __getitem__(self, idx):
         inp_path = self.inp_paths[idx]
         gt_path = self.gt_paths[idx]
-        inp_data = get_data(inp_path, norm=0)
-        gt_data = get_data(gt_path, norm=0)
+        inp_data = get_data(inp_path, norm=1)
+        gt_data = get_data(gt_path, norm=1)
         if self.patch_size:
             input_patches, target_patches = get_patch(inp_data, gt_data, self.patch_n, self.patch_size)
             #print(input_patches.min(), input_patches.max())
             #print(target_patches.min(), target_patches.max())
-            return (input_patches, target_patches)
+            return (input_patches, target_patches, inp_path)
         else:
             return (inp_data, gt_data, inp_path)
 

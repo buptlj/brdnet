@@ -17,7 +17,7 @@ import logging
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='train', help="train | test")
-    parser.add_argument('--pretrained', type=str, default='./save/WGANVGG_31000iter.ckpt', help="pretrained model")
+    parser.add_argument('--pretrained', type=str, default='', help="pretrained model")
 
     parser.add_argument('--train_path', type=str, default='../data/prj_denoise/train.txt')
     parser.add_argument('--val_path', type=str, default='../data/prj_denoise/val.txt')
@@ -62,8 +62,8 @@ def train(dataloader, model, loss_func, optimizer, epoch, args, logger):
 
         total_loss += loss.item()
         if batch_i % args.print_iters == 0:
-            logger.info("Epoch: {} Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f}".format(epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1)))
-        #if batch_i > 10: break
+            logger.info("Epoch: {} Batch: {}/{} | train_loss: {:.6f} | Mean loss: {:.6f} lr: {}".format(epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1), optimizer.param_groups[0]['lr']))
+        #if batch_i > 20: break
     print('')
     return total_loss / (batch_i + 1)
 
@@ -90,7 +90,7 @@ def val(dataloader, model, loss_func, epoch, args, logger):
             if batch_i % args.print_iters == 0:
                 logger.info("Epoch: {} Batch: {}/{} | val_loss: {:.6f} | Mean loss: {:.6f}, psnr: {:.2f}, mean psnr: {:.2f}, org_psnr: {:.2f}, mean org_psnr: {:.2f}".format(
                     epoch, batch_i+1, len(dataloader), loss.item(), total_loss/(batch_i+1), psnr, total_psnr/(batch_i+1), org_psnr, total_org_psnr/(batch_i+1)))
-            #if batch_i > 10: break
+            #if batch_i > 20: break
     logger.info('mean psnr: {}'.format(total_psnr / len(dataloader)))
     logger.info('mean org psnr: {}'.format(total_org_psnr / len(dataloader)))
     logger.info('mean loss: {}'.format(total_loss / len(dataloader)))

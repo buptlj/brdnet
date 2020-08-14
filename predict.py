@@ -13,6 +13,8 @@ from models import BRDNet
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.logger import setup_logger
 import logging
+from libtiff import TIFF
+import cv2
 
 
 def get_args():
@@ -45,13 +47,41 @@ def get_args():
     print(args)
     return args
 
-def save_denoise_img(pred, data_path):
+def get_data(data_path, norm=0):
+    suffix = data_path.split('/')[-1].split('.')[-1]
+    if suffix == 'npy':
+        data = np.load(data_path)
+    elif suffix == 'tif':
+        data = TIFF.open(data_path, mode = "r")
+        data = list(data.iter_images())[0]
+    else:
+        data = cv2.imread(data_path)
+
+    if norm:
+        min_v = data.min()
+        max_v = data.max()
+        data = (data - min_v) / (max_v - min_v) * norm
+    #print('data: ', data.min(), data.max())
+    return data
+
+def denorm(data, data_path):
+    org_gt = get_data(data_path)
+    max_v = org_gt.max()
+    data = data * max_v
+    return data
+
+
+def save_denoise_img(pred, data_path, save_img=True):
     #'/data/projects/applect/projections_gaussian_noise/data_noisy_31116_090.tif'
     pred = pred.squeeze(0).squeeze(0)
     pred = pred.cpu().numpy()
-    save_path = data_path.replace('projections_gaussian_noise', 'apple_31101/gauss_prj_denoise').replace('_noisy', '').replace('.tif', '.npy')
-
+    save_path = data_path.replace('projections_gaussian_noise', 'apple_31101/gauss_prj_denoise_denorm').replace('_noisy', '').replace('.tif', '.npy')
     np.save(save_path, pred)
+    if save_img:
+        min_v = pred.min()
+        max_v = pred.max()
+        pred = (pred - min_v) / (max_v - min_v) * 255
+        cv2.imwrite(save_path.replace('.npy', '.jpg'), pred)
 
 
 def val(dataloader, model, loss_func, epoch, args, logger):
@@ -61,14 +91,17 @@ def val(dataloader, model, loss_func, epoch, args, logger):
     model.eval()
     with torch.no_grad():
         for batch_i, (inp_data, gt_data, inp_path) in enumerate(dataloader):
+            gt_path = inp_path[0].replace('projections_gaussian_noise', 'projections_noisefree').replace('data_noisy_', 'data_')
             inp_data = inp_data.unsqueeze(0).to(args.device)
             gt_data = gt_data.unsqueeze(0).to(args.device)
             pred = model(inp_data)
             pred[pred < 0] = 0
             pred[pred > 1] = 1
-            save_denoise_img(pred, inp_path[0])
             loss = loss_func(pred, gt_data)
             org_mse = loss_func(inp_data, gt_data)
+
+            pred = denorm(pred, gt_path)
+            save_denoise_img(pred, inp_path[0], save_img=False)
             # batch size 1
             psnr = 10 * torch.log10(1/loss).item()
             org_psnr = 10 * torch.log10(1/org_mse).item()
