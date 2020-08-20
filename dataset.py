@@ -4,6 +4,7 @@ from glob import glob
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from libtiff import TIFF
+import random
 
 
 class CTDataset(Dataset):
@@ -89,7 +90,23 @@ def get_patch(full_input_img, full_target_img, patch_n, patch_size, drop_backgro
             continue
         else:
             n += 1
+            patch_input_img, patch_target_img = augment(patch_input_img, patch_target_img)
             patch_input_imgs.append(patch_input_img)
             patch_target_imgs.append(patch_target_img)
     return np.array(patch_input_imgs), np.array(patch_target_imgs)
+
+
+def augment(*args, hflip=True, rot=True):
+    hflip = hflip and random.random() < 0.5
+    vflip = rot and random.random() < 0.5
+    rot90 = rot and random.random() < 0.5
+
+    def _augment(img):
+        if hflip: img = img[:, ::-1]
+        if vflip: img = img[::-1, :]
+        if rot90: img = img.transpose(1, 0)
+        
+        return img
+
+    return _augment(args[0]), _augment(args[-1])
 
