@@ -5,6 +5,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from libtiff import TIFF
 import random
+from utils.tools import *
 
 
 class CTDataset(Dataset):
@@ -34,41 +35,18 @@ class CTDataset(Dataset):
     def __getitem__(self, idx):
         inp_path = self.inp_paths[idx]
         gt_path = self.gt_paths[idx]
-        inp_data = get_data(inp_path, norm=0)[::2]
-        gt_data = get_data(gt_path, norm=0)[::2]
-        inp_data = norm_data(inp_data)
-        gt_data = norm_data(gt_data)
+        inp_data = get_data(inp_path, norm=1)
+        gt_data = get_data(gt_path, norm=1)
+        #inp_data = norm_data(inp_data)
+        #gt_data = norm_data(gt_data)
         if self.patch_size:
-            input_patches, target_patches = get_patch(inp_data, gt_data, self.patch_n, self.patch_size)
+            input_patches, target_patches = get_patch(inp_data, gt_data, self.patch_n, self.patch_size, self.mode, drop_background=0)
             #print(input_patches.min(), input_patches.max())
             #print(target_patches.min(), target_patches.max())
             return (input_patches, target_patches, inp_path)
         else:
             return (inp_data, gt_data, inp_path)
 
-def norm_data(data):
-    min_v = data.min()
-    max_v = data.max()
-    res = (data - min_v) / (max_v - min_v)
-    return res
-
-
-def get_data(data_path, norm=0):
-    suffix = data_path.split('/')[-1].split('.')[-1]
-    if suffix == 'npy':
-        data = np.load(data_path)
-    elif suffix == 'tif':
-        data = TIFF.open(data_path, mode = "r")
-        data = list(data.iter_images())[0]
-    else:
-        data = cv2.imread(data_path)
-
-    if norm:
-        min_v = data.min()
-        max_v = data.max()
-        data = (data - min_v) / (max_v - min_v) * norm
-    #print('data: ', data.min(), data.max())
-    return data
 
 def val_img():
     gt_path = '/data/projects/applect/projections_noisefree/data_31101_520.tif'
@@ -78,7 +56,7 @@ def val_img():
     target_img = get_data(gt_path)
     return (input_img, target_img, data_name)
 
-def get_patch(full_input_img, full_target_img, patch_n, patch_size, drop_background=0.1):
+def get_patch(full_input_img, full_target_img, patch_n, patch_size, mode, drop_background=0.1):
     assert full_input_img.shape == full_target_img.shape
     patch_input_imgs = []
     patch_target_imgs = []
@@ -99,7 +77,7 @@ def get_patch(full_input_img, full_target_img, patch_n, patch_size, drop_backgro
             continue
         else:
             n += 1
-            if self.mode == 'train':
+            if mode == 'train':
                 patch_input_img, patch_target_img = augment(patch_input_img, patch_target_img)
             patch_input_imgs.append(patch_input_img)
             patch_target_imgs.append(patch_target_img)
