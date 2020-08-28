@@ -75,7 +75,7 @@ def save_denoise_img(pred, data_path, save_img=True):
     #'/data/projects/applect/projections_gaussian_noise/data_noisy_31116_090.tif'
     pred = pred.squeeze(0).squeeze(0)
     pred = pred.cpu().numpy()
-    save_path = data_path.replace('projections_gaussian_noise', 'apple_31101/gauss_prj_denoise_denorm').replace('_noisy', '').replace('.tif', '.npy')
+    save_path = data_path.replace('projections_gaussian_noise', 'apple_31101/gauss_prj_denoise_25p').replace('_noisy', '').replace('.tif', '.npy')
     np.save(save_path, pred)
     if save_img:
         min_v = pred.min()
@@ -100,7 +100,7 @@ def val(dataloader, model, loss_func, epoch, args, logger):
             loss = loss_func(pred, gt_data)
             org_mse = loss_func(inp_data, gt_data)
 
-            pred = denorm(pred, gt_path)
+            #pred = denorm(pred, gt_path)
             save_denoise_img(pred, inp_path[0], save_img=False)
             # batch size 1
             psnr = 10 * torch.log10(1/loss).item()

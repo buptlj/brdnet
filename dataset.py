@@ -34,8 +34,10 @@ class CTDataset(Dataset):
     def __getitem__(self, idx):
         inp_path = self.inp_paths[idx]
         gt_path = self.gt_paths[idx]
-        inp_data = get_data(inp_path, norm=1)
-        gt_data = get_data(gt_path, norm=1)
+        inp_data = get_data(inp_path, norm=0)[::2]
+        gt_data = get_data(gt_path, norm=0)[::2]
+        inp_data = norm_data(inp_data)
+        gt_data = norm_data(gt_data)
         if self.patch_size:
             input_patches, target_patches = get_patch(inp_data, gt_data, self.patch_n, self.patch_size)
             #print(input_patches.min(), input_patches.max())
@@ -43,6 +45,13 @@ class CTDataset(Dataset):
             return (input_patches, target_patches, inp_path)
         else:
             return (inp_data, gt_data, inp_path)
+
+def norm_data(data):
+    min_v = data.min()
+    max_v = data.max()
+    res = (data - min_v) / (max_v - min_v)
+    return res
+
 
 def get_data(data_path, norm=0):
     suffix = data_path.split('/')[-1].split('.')[-1]
@@ -90,7 +99,8 @@ def get_patch(full_input_img, full_target_img, patch_n, patch_size, drop_backgro
             continue
         else:
             n += 1
-            patch_input_img, patch_target_img = augment(patch_input_img, patch_target_img)
+            if self.mode == 'train':
+                patch_input_img, patch_target_img = augment(patch_input_img, patch_target_img)
             patch_input_imgs.append(patch_input_img)
             patch_target_imgs.append(patch_target_img)
     return np.array(patch_input_imgs), np.array(patch_target_imgs)
